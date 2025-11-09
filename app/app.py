@@ -84,7 +84,7 @@ table { border-radius:14px; overflow:hidden; }
 # ------------------------------
 # HF Client
 # ------------------------------
-HF_TOKEN = os.getenv("HF_TOKEN")
+HF_TOKEN = os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN")
 if not HF_TOKEN:
     st.error("HF_TOKEN missing in .env file")
 client = InferenceClient(api_key=HF_TOKEN)
