@@ -2,146 +2,141 @@
 import os
 import json
 from typing import List, Dict, Any
+
 import streamlit as st
-import PyPDF2 as pdf
-from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
-from streamlit.components.v1 import html as components_html   # for confetti hearts
+from huggingface_hub import InferenceClient
+import PyPDF2 as pdf
+
 
 # ------------------------------
 # Page & theme
 # ------------------------------
 load_dotenv()
-st.set_page_config(page_title="For You ♡", page_icon="💌", layout="wide")
+st.set_page_config(
+    page_title="Resume Evaluator",
+    page_icon="🧭",
+    layout="wide",
+)
 
-# Romantic CSS (fonts, cards, buttons, background)
+# Global CSS (modern, neutral, glassy)
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Playfair+Display:wght@500;700&family=Inter:wght@400;600&display=swap');
-
-html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
-
-.romantic-title {
-  font-family: 'Great Vibes', cursive !important;
-  font-size: 64px !important;
-  color: #B5838D !important;
-  text-align: center;
-  margin: 0.2rem 0 0.2rem 0;
+:root {
+  --card-bg: rgba(255,255,255,0.7);
+  --card-border: rgba(0,0,0,0.06);
+  --shadow-sm: 0 6px 16px rgba(0,0,0,0.06);
+  --shadow-md: 0 12px 28px rgba(0,0,0,0.08);
+  --brand: #2B6CB0; /* sync with theme primaryColor */
+  --muted: #4A5568; /* slate */
 }
 
-.tagline {
-  text-align:center; color:#7A5C65; margin-top:-8px; margin-bottom:18px;
+html, body, [class*="css"]  {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
 }
 
-.love-banner{
-  background:#FFF6F9;
-  border:1px solid rgba(181,131,141,.25);
-  color:#5A4B52;
-  border-radius:14px;
-  padding:12px 16px;
-  text-align:center;
-  margin: 4px 0 18px 0;
-  box-shadow: 0 2px 10px rgba(181,131,141,0.08);
+/* Hero section */
+.hero {
+  border-radius: 18px;
+  padding: 26px 28px;
+  background: linear-gradient(135deg, #EBF4FF 0%, #F7FAFC 55%, #FFFFFF 100%);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-md);
+  margin-bottom: 10px;
 }
-.love-banner b{ color:#7A5C65; }
-
-.heart-card {
-  background: linear-gradient(180deg, #FEF1F5 0%, #FDE2E4 100%);
-  border-radius: 20px;
-  padding: 22px 24px;
-  box-shadow: 0 8px 24px rgba(181,131,141,0.18);
-  border: 1px solid rgba(181,131,141,0.22);
-  margin-bottom: 18px;
+.hero h1 {
+  margin: 0 0 8px 0;
+  font-size: 34px;
+  letter-spacing: .2px;
+}
+.hero p {
+  margin: 0; color: var(--muted);
 }
 
+/* Glass cards */
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+}
+
+/* Section headings inside cards */
+.card h3 {
+  margin: 0 0 8px 0;
+  font-weight: 700;
+}
 .ribbon {
   height: 1px; width: 100%;
-  background: linear-gradient(90deg, rgba(0,0,0,0), #D9ABDA, rgba(0,0,0,0));
-  margin: 16px 0 12px 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0), #E2E8F0, rgba(0,0,0,0));
+  margin: 10px 0 12px 0;
 }
 
-section[data-testid="stSidebar"] button, .stButton>button {
+/* Primary button styling */
+.stButton>button {
+  border-radius: 12px !important;
+  padding: 0.8rem 1.1rem !important;
+  font-weight: 700 !important;
+  transition: transform .05s ease, box-shadow .15s ease !important;
+  box-shadow: 0 8px 20px rgba(43,108,176,0.18) !important;
+}
+.stButton>button:hover { transform: translateY(-1px); }
+
+/* Pills / badges */
+.pill {
+  display: inline-block;
+  padding: 4px 10px;
   border-radius: 999px;
-  padding: 0.6rem 1.2rem;
-  font-weight: 600;
+  background: #EDF2F7;
+  border: 1px solid #E2E8F0;
+  color: #2D3748;
+  font-size: 12px;
+  margin-right: 8px;
 }
 
-.heart-list li::marker { content: "❤  "; color:#B5838D; }
+/* Lists */
+ul.clean { padding-left: 1.1rem; margin: 0; }
+ul.clean li { margin: 6px 0; }
 
-body:before {
-  content:"";
-  position: fixed; inset:0;
-  background:
-    radial-gradient( circle at 10% 10%, rgba(245,214,220,0.35) 0 120px, transparent 130px),
-    radial-gradient( circle at 90% 20%, rgba(217,171,218,0.30) 0 120px, transparent 130px),
-    radial-gradient( circle at 15% 85%, rgba(250,218,221,0.35) 0 120px, transparent 130px);
-  pointer-events:none; z-index:-1;
-}
-table { border-radius:14px; overflow:hidden; }
+/* Hide Streamlit's deploy/help menu dots for cleaner look (still clickable via hotkeys) */
+header [data-testid="stMainMenu"] { opacity: .65; }
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------
-# HF Client
-# ------------------------------
-HF_TOKEN = os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN")
-if not HF_TOKEN:
-    st.error("HF_TOKEN missing in .env file")
-client = InferenceClient(api_key=HF_TOKEN)
 
 # ------------------------------
-# Small UI helpers
+# Hugging Face client (no UI disclosure)
 # ------------------------------
-def card(title: str, body_md: str):
-    st.markdown(f'''
-    <div class="heart-card">
-      <h3 style="margin:0;color:#7A5C65">{title}</h3>
+HF_TOKEN = os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN")
+client = InferenceClient(api_key=HF_TOKEN) if HF_TOKEN else None
+
+
+# ------------------------------
+# Helpers
+# ------------------------------
+def card(title: str, body_md: str = ""):
+    st.markdown(f"""
+    <div class="card">
+      <h3>{title}</h3>
       <div class="ribbon"></div>
       <div>{body_md}</div>
     </div>
-    ''', unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-def heart_confetti():
-    components_html("""
-    <script>
-      const burst = () => {
-        const colors = ['#B5838D','#D9ABDA','#FADADD','#FDE2E4'];
-        for (let i=0;i<28;i++){
-          const e = document.createElement('div');
-          e.innerHTML = '❤';
-          e.style.position='fixed';
-          e.style.left = (50 + (Math.random()*24-12)) + 'vw';
-          e.style.top = (18 + (Math.random()*10-5)) + 'vh';
-          e.style.fontSize = (18+Math.random()*18)+'px';
-          e.style.color = colors[Math.floor(Math.random()*colors.length)];
-          e.style.opacity = 1;
-          e.style.transition = 'transform 1.6s ease-out, opacity 1.6s ease-out';
-          e.style.zIndex = 9999;
-          document.body.appendChild(e);
-          const x = (Math.random()*2-1)*180;
-          const y = 240 + Math.random()*150;
-          requestAnimationFrame(()=> {
-            e.style.transform = `translate(${x}px, ${y}px) rotate(${Math.random()*120-60}deg)`;
-            e.style.opacity = 0;
-          });
-          setTimeout(()=> e.remove(), 1700);
-        }
-      };
-      burst();
-    </script>
-    """, height=0)
 
-# ------------------------------
-# Core logic
-# ------------------------------
-def input_pdf_text(uploaded_file) -> str:
-    reader = pdf.PdfReader(uploaded_file)
+def pdf_to_text(file) -> str:
+    reader = pdf.PdfReader(file)
     out = []
     for page in reader.pages:
         out.append(page.extract_text() or "")
     return "\n".join(out)
 
-def ats_companywise_prompt(resume_text: str, jd_text: str) -> List[Dict[str, str]]:
+
+def build_prompt(resume_text: str, jd_text: str) -> list[dict[str, str]]:
     rubric = r"""
 Act as a Resume Checker and ATS. You will:
 1) Score the resume using the rubric below (on ORIGINAL content only).
@@ -159,11 +154,7 @@ Rubric (Total 100):
 - GitHub + Medium: 20 (10 each)
 - Resume Name: 10
 
-Evaluation Bands:
-- 90–100 Excellent
-- 75–89 Good
-- 50–74 Average
-- <50 Poor
+Evaluation Bands: 90–100 Excellent, 75–89 Good, 50–74 Average, <50 Poor
 
 STRICT INSTRUCTIONS:
 - Calculate ALL scores on ORIGINAL content (not your rewrites).
@@ -211,8 +202,23 @@ Return ONLY a JSON object with EXACTLY this schema:
         {"role": "user", "content": user},
     ]
 
-def call_deepseek(resume_text: str, jd_text: str) -> Dict[str, Any]:
-    messages = ats_companywise_prompt(resume_text, jd_text)
+
+def parse_jsonish(text: str) -> Dict[str, Any]:
+    s = (text or "").strip()
+    if s.startswith("```"):
+        s = s.strip("` \n\r\t")
+        if s.lower().startswith("json"):
+            s = s[4:].strip()
+    try:
+        return json.loads(s)
+    except Exception:
+        return {"raw_output": text}
+
+
+def run_model(resume_text: str, jd_text: str) -> Dict[str, Any]:
+    if not client:
+        return {"error": "HF client not available (missing token)."}
+    messages = build_prompt(resume_text, jd_text)
     completion = client.chat.completions.create(
         model="deepseek-ai/DeepSeek-V3.2-Exp",
         messages=messages,
@@ -221,143 +227,170 @@ def call_deepseek(resume_text: str, jd_text: str) -> Dict[str, Any]:
     )
     content = completion.choices[0].message["content"]
     text = content if isinstance(content, str) else json.dumps(content)
-    t = text.strip()
-    if t.startswith("```"):
-        t = t.strip("` \n\r\t")
-        if t.lower().startswith("json"):
-            t = t[4:].strip()
-    try:
-        return json.loads(t)
-    except Exception:
-        return {"raw_output": t}
+    return parse_jsonish(text)
+
 
 # ------------------------------
-# Header + fixed gift banner
+# Hero
 # ------------------------------
-st.markdown('<div class="romantic-title" title="thank you for being you">A Little Resume Magic, For You ♡</div>', unsafe_allow_html=True)
-st.markdown('<div class="tagline">curated suggestions tailored to your journey — with love</div>', unsafe_allow_html=True)
+st.markdown("""
+<div class="hero">
+  <h1>Resume Evaluator</h1>
+  <p>ATS-style scoring, JD alignment, and STAR rewrites — clear, fast, and organized.</p>
+</div>
+""", unsafe_allow_html=True)
 
-# Fixed message for Shaive (no input box)
-SHAIVE_NAME = "Shaive"
-LOVE_NOTE = "Every step you’ve taken is beautiful. Let’s polish it together."
-st.markdown(f'<div class="love-banner"><b>{SHAIVE_NAME}</b>, {LOVE_NOTE}</div>', unsafe_allow_html=True)
-
-# ------------------------------
-# Inputs
-# ------------------------------
-jd = st.text_area("Paste the Job Description")
-uploaded_file = st.file_uploader("Upload Your Resume (PDF)", type="pdf", help="Upload a PDF resume")
-
-# Romantic CTA
-submit_col, _ = st.columns([1,3])
-with submit_col:
-    submit = st.button("Shall we polish this together? ❤", use_container_width=True)
 
 # ------------------------------
-# Run
+# Input row
 # ------------------------------
-if submit:
-    if not uploaded_file:
-        st.error("Please upload a PDF file first.")
-    elif not jd.strip():
-        st.error("Please paste a job description.")
+left, right = st.columns([1, 1])
+
+with left:
+    uploaded = st.file_uploader("Upload resume (PDF)", type=["pdf"])
+    if uploaded is not None:
+        size_kb = f"{(uploaded.size/1024):.0f} KB"
+        st.markdown(f"<span class='pill'>📄 {uploaded.name}</span><span class='pill'>📦 {size_kb}</span>", unsafe_allow_html=True)
+
+with right:
+    jd_text = st.text_area("Paste the Job Description", height=180, placeholder="Paste the role’s JD here...")
+    st.caption(f"Characters: {len(jd_text)}")
+
+analyze = st.button("Analyze", type="primary", use_container_width=True)
+
+
+# ------------------------------
+# Run + Results
+# ------------------------------
+if analyze:
+    if not uploaded:
+        st.error("Please upload a PDF file.")
+    elif not jd_text.strip():
+        st.error("Please paste a Job Description.")
     else:
-        # Cute spinner text instead of "Analyzing with DeepSeek..."
-        with st.spinner("Sprinkling a little stardust on your resume… ✨"):
-            resume_text = input_pdf_text(uploaded_file)
-            result = call_deepseek(resume_text, jd)
+        with st.spinner("Evaluating…"):
+            resume_text = pdf_to_text(uploaded)
+            result = run_model(resume_text, jd_text)
 
-        if "raw_output" in result:
-            st.error("Model did not return valid JSON. Showing raw output below.")
-            st.code(result["raw_output"])
+        if result.get("error"):
+            st.error(result["error"])
             st.stop()
 
-        # Celebrate!
-        heart_confetti()
+        if "raw_output" in result:
+            st.error("The model did not return valid JSON. Expand the Debug tab to see raw output.")
+        
+        # Tabs for a dynamic browsing experience
+        tabs = st.tabs(["Overview", "Suggestions", "Keywords", "About", "Skills & Links", "Company Rewrites", "Debug"])
 
-        # ---- Score card
-        total_score = result.get('total_score', '—')
-        percentage_match = result.get('percentage_match', '—')
-        section_scores = result.get("section_scores") or {}
-        sec_lines = []
-        for label in ["address", "about", "skills", "experience", "github", "medium", "resume_name"]:
-            if label in section_scores:
-                sec_lines.append(f"- **{label.capitalize()}**: {section_scores[label]}")
-        card("Your Score & Match",
-             f"- **Total:** **{total_score} / 100**  \n"
-             f"- **JD Match:** **{percentage_match}%**  \n\n" +
-             ("\n".join(sec_lines) if sec_lines else "")
-        )
+        # ---- Overview
+        with tabs[0]:
+            c1, c2, c3 = st.columns([1,1,1])
+            total_score = result.get('total_score', None)
+            pct_match = result.get('percentage_match', None)
+            section_scores = result.get("section_scores") or {}
+
+            with c1:
+                card("Overall Score", f"<h2 style='margin:0'>{total_score if total_score is not None else '—'}/100</h2>")
+            with c2:
+                card("JD Match", f"<h2 style='margin:0'>{(str(pct_match) + '%') if pct_match is not None else '—'}</h2>")
+            with c3:
+                if section_scores:
+                    lines = [f"- **{k.capitalize()}**: {v}" for k, v in section_scores.items()]
+                    card("Section Scores", "<br/>".join(lines))
+                else:
+                    card("Section Scores", "—")
 
         # ---- Suggestions
-        suggestions = result.get("suggestions") or []
-        card("Sweet Suggestions",
-             "<ul class='heart-list'>" + "".join([f"<li>{s}</li>" for s in suggestions]) + "</ul>" if suggestions else "—")
+        with tabs[1]:
+            suggestions = result.get("suggestions") or []
+            if suggestions:
+                card("Actionable Suggestions",
+                     "<ul class='clean'>" + "".join([f"<li>{s}</li>" for s in suggestions]) + "</ul>")
+            else:
+                card("Actionable Suggestions", "—")
 
-        # ---- Missing keywords
-        miss = result.get("missing_keywords") or []
-        card("Missing Keywords (to weave in)", ", ".join(miss) if miss else "All set!")
+        # ---- Keywords
+        with tabs[2]:
+            missing = result.get("missing_keywords") or []
+            if missing:
+                pills = " ".join([f"<span class='pill'>{kw}</span>" for kw in missing])
+                card("Missing Keywords", pills)
+            else:
+                card("Missing Keywords", "None detected")
 
-        # ---- About preview
-        about = result.get("about") or {}
-        about_body = []
-        if about:
-            about_body.append(f"**Present:** {about.get('present')}")
-            about_body.append(f"**Recommended Header:** {about.get('recommended_header')}")
-            if about.get("preview"):
-                about_body.append(f"> {about.get('preview')}")
-        card("About Section (Preview)", "<br/>".join(about_body) if about_body else "—")
+        # ---- About
+        with tabs[3]:
+            about = result.get("about") or {}
+            body = []
+            if about:
+                body.append(f"**Present:** {about.get('present')}")
+                if about.get("recommended_header"):
+                    body.append(f"**Header:** {about.get('recommended_header')}")
+                if about.get("preview"):
+                    body.append(f"> {about.get('preview')}")
+            card("About (detected)", "<br/>".join(body) if body else "—")
 
-        # ---- Skills
-        skills = result.get("skills_list") or []
-        card("Normalized Skills", ", ".join(skills) if skills else "—")
+        # ---- Skills & Links
+        with tabs[4]:
+            s_left, s_right = st.columns([1,1])
+            skills = result.get("skills_list") or []
+            with s_left:
+                card("Normalized Skills", ", ".join(skills) if skills else "—")
 
-        # ---- Links & resume name
-        g = result.get("github_links") or []
-        m = result.get("medium_links") or []
-        rn = result.get("resume_name_recommendation")
-        links_body = []
-        if g: links_body.append("**GitHub:** " + ", ".join(g))
-        if m: links_body.append("**Medium:** " + ", ".join(m))
-        if rn: links_body.append("**Resume Name Recommendation:** " + rn)
-        card("Links & Name", "<br/>".join(links_body) if links_body else "—")
+            links_body = []
+            g = result.get("github_links") or []
+            m = result.get("medium_links") or []
+            rn = result.get("resume_name_recommendation")
+            if g: links_body.append("**GitHub:** " + ", ".join(g))
+            if m: links_body.append("**Medium:** " + ", ".join(m))
+            if rn: links_body.append("**Resume Name Suggestion:** " + rn)
+            with s_right:
+                card("Links & Naming", "<br/>".join(links_body) if links_body else "—")
 
-        # ---- Company-wise rewrites
-        exp = result.get("experience_company_analysis") or []
-        if not exp:
-            card("Expert Suggestions — Company-wise Bullet Rewrites", "_No experience entries parsed._")
-        else:
-            for entry in exp:
-                company = entry.get("company") or "(Company)"
-                role = entry.get("role") or ""
-                dates = entry.get("dates") or ""
-                header = f"**{company}**"
-                if role or dates:
-                    header += f" &nbsp;&nbsp; <span style='color:#7A5C65'>({role} — {dates})</span>"
-                body = []
-                if entry.get("summary"):
-                    body.append(entry["summary"])
-                bullets = entry.get("bullets") or []
-                if bullets:
-                    for idx, b in enumerate(bullets, start=1):
-                        issues = "; ".join(b.get("issues") or [])
-                        star = "; ".join(b.get("star_violations") or [])
-                        tags = ", ".join(b.get("jd_alignment") or [])
-                        score = b.get("impact_score", "—")
-                        body.append(
-                            f"<div class='ribbon'></div>"
-                            f"<b>Bullet {idx}</b><br/>"
-                            f"- <i>Original</i>: {b.get('original','')}<br/>"
-                            f"- <i>Rewrite</i>: {b.get('rewrite','')}<br/>"
-                            + (f"- <i>Issues</i>: {issues}<br/>" if issues else "")
-                            + (f"- <i>STAR Violations</i>: {star}<br/>" if star else "")
-                            + (f"- <i>JD Alignment Tags</i>: {tags}<br/>" if tags else "")
-                            + f"- <i>Impact Score</i>: {score}/100"
-                        )
-                else:
-                    body.append("_No bullets detected._")
-                card(header, "<br/>".join(body))
+        # ---- Company Rewrites
+        with tabs[5]:
+            exp = result.get("experience_company_analysis") or []
+            if not exp:
+                card("Company-wise Bullet Rewrites", "_No experience entries parsed._")
+            else:
+                for entry in exp:
+                    company = entry.get("company") or "(Company)"
+                    role = entry.get("role") or ""
+                    dates = entry.get("dates") or ""
+                    header = f"**{company}**"
+                    if role or dates:
+                        header += f"  <span style='color:#7d8793'>({role} — {dates})</span>"
 
-        # ---- Debug JSON
-        with st.expander("Raw JSON (debug)"):
-            st.json(result)
+                    lines = []
+                    if entry.get("summary"):
+                        lines.append(entry["summary"])
+
+                    bullets = entry.get("bullets") or []
+                    if bullets:
+                        for i, b in enumerate(bullets, start=1):
+                            issues = "; ".join(b.get("issues") or [])
+                            star = "; ".join(b.get("star_violations") or [])
+                            tags = ", ".join(b.get("jd_alignment") or [])
+                            score = b.get("impact_score", "—")
+
+                            lines.append(
+                                f"<div class='ribbon'></div>"
+                                f"<b>Bullet {i}</b><br/>"
+                                f"- <i>Original</i>: {b.get('original','')}<br/>"
+                                f"- <i>Rewrite</i>: {b.get('rewrite','')}<br/>"
+                                + (f"- <i>Issues</i>: {issues}<br/>" if issues else "")
+                                + (f"- <i>STAR Violations</i>: {star}<br/>" if star else "")
+                                + (f"- <i>JD Alignment</i>: {tags}<br/>" if tags else "")
+                                + f"- <i>Impact Score</i>: {score}/100"
+                            )
+                    else:
+                        lines.append("_No bullets detected._")
+
+                    card(header, "<br/>".join(lines))
+
+        # ---- Debug
+        with tabs[6]:
+            if "raw_output" in result:
+                card("Raw Output", f"<pre style='white-space:pre-wrap'>{result['raw_output']}</pre>")
+            else:
+                st.json(result)
