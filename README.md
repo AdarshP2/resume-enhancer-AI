@@ -31,6 +31,8 @@ Glass cards & badges
 
 Interactive tabs for results
 
+**Project URL - https://resume-enhancer-ai-general.streamlit.app/**
+
 **⚡ Runs locally or online (Streamlit Cloud, Hugging Face Spaces, etc.)**
 
 **🧰 Tech Stack**
